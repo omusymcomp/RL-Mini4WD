@@ -52,29 +52,35 @@ class DQNAgent:
             self.epsilon *= self.epsilon_decay
 
 # 環境から情報を取得する関数
-def get_environment_info(conn):
+def get_environment_info(conn, buffer):
     float_indices = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 19, 20}
     
     while True:
         data = conn.recv(1024).decode('utf-8')
-        if len(data) > 21 and data.strip():  # データが空でないことを確認
-            result = []
-            for i, x in enumerate(data.split(',')):
-                if i in float_indices:
-                    try:
-                        result.append(float(x))
-                    except ValueError:
-                        result.append(0.0)
-                else:
-                    result.append(x)
-            return result
+        buffer += data
+        if '\n' in buffer:  # 改行を区切り文字として使用
+            lines = buffer.split('\n')
+            buffer = lines[-1]  # 最後の部分を次のバッファに残す
+            for line in lines[:-1]:
+                if len(line) > 21 and line.strip():  # データが空でないことを確認
+                    result = []
+                    for i, x in enumerate(line.split(',')):
+                        if i in float_indices:
+                            try:
+                                result.append(float(x))
+                            except ValueError:
+                                result.append(0.0)
+                        else:
+                            result.append(x)
+                    return result, buffer
 
 
 
 # データを無視する関数
-def ignore_initial_data(conn, num_ignores=5):
+def ignore_initial_data(conn, buffer, num_ignores=5):
     for _ in range(num_ignores):
-        get_environment_info(conn)
+        _, buffer = get_environment_info(conn, buffer)
+    return buffer
 
 # メインの強化学習ループ
 if __name__ == "__main__":
