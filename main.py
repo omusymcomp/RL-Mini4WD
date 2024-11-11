@@ -58,8 +58,7 @@ def get_environment_info(conn, buffer):
     while True:
         data = conn.recv(1024).decode('utf-8')
         buffer += data
-        print(f"Buffer: {repr(buffer)}")
-        if '\n' in buffer or '\r\n' in buffer:  # 改行を区切り文字として使用
+        if '\n' in buffer:  # 改行を区切り文字として使用
             lines = buffer.split('\n')
             buffer = lines[-1]  # 最後の部分を次のバッファに残す
             for line in lines[:-1]:
@@ -83,14 +82,20 @@ def ignore_initial_data(conn, buffer, num_ignores=5):
         _, buffer = get_environment_info(conn, buffer)
     return buffer
 
+# シム内環境をリセット
+def reset_env():
+        pyautogui.keyDown('r')
+        pyautogui.keyUp('r')
+
 # 変数の初期化
-inGameSec = next_state_info[0]  # シミュレータ内経過時間
 initial_inGameSec = None  # 初期のinGameSecの値を記録する変数
 
 # メインの強化学習ループ
 if __name__ == "__main__":
+
+    pyautogui.FAILSAFE = False
     agent = DQNAgent()
-    episodes = 100      # 学習回数
+    episodes = 500      # 学習回数
     batch_size = 32
     rewards = []
 
@@ -108,48 +113,59 @@ if __name__ == "__main__":
         # 初期データを無視
         buffer = ignore_initial_data(conn, buffer)
 
-        state, buffer = get_environment_info(conn, buffer)
-        state = np.array(state[1:10]).reshape(1, -1)
+        env_info, buffer = get_environment_info(conn, buffer)
+        state = np.array(env_info[1:10]).reshape(1, -1)
         total_reward = 0
-        for time_step in range(5000):  # 最大ステップ数を設定
+        time_passed = 0
+
+        # 変数の初期化
+        inGameSec = env_info[0]  # シミュレータ内経過時間
+        initial_inGameSec = None  # 初期のinGameSecの値を記録する変数
+
+        while inGameSec <= 60:  # 最大ゲーム内時間
             action = agent.act(state)
             if action == 1:
                 pyautogui.keyDown('w')
             else:
                 pyautogui.keyUp('w')
             
-            next_state_info, buffer = get_environment_info(conn, buffer)
-            next_state = np.array(next_state_info[1:10]).reshape(1, -1)
+            next_env_info, buffer = get_environment_info(conn, buffer)
+            next_state = np.array(next_env_info[1:10]).reshape(1, -1)
             reward = 0
-            if next_state_info[18] != state[0][8]:  # セクション名が変わったら
-                reward = 1 / (next_state_info[0] - state[0][0])
-            total_reward += reward
             done = False
 
+            if next_env_info[20] != env_info[20]:  # セクション名が変わったら
+                reward = 10 / (next_env_info[0] - time_passed)
+                total_reward += reward
+                print(f"S通過:{reward}, 時間:{next_env_info[0] - time_passed}")
+                time_passed = next_env_info[0]
+            
             # next_state_info[12] が500以下になった時点の inGameSec を記録
-            if next_state_info[12] <= 500 and initial_inGameSec is None:
+            if next_env_info[12] >= 500:
                 initial_inGameSec = inGameSec
 
             # inGameSec が3増えたかどうかをチェック
             if initial_inGameSec is not None and inGameSec - initial_inGameSec >= 3:
                 done = True
+                print("一定時間停止していました")
 
-            if next_state_info[19] == 3:
+            if next_env_info[19] == 1:
                 done = True
+                print("完走しました")
 
             agent.remember(state, action, reward, next_state, done)
             state = next_state
-            inGameSec = next_state_info[0]  # シミュレータ内経過時間を更新
+            env_info = next_env_info
+            inGameSec = next_env_info[0]  # シミュレータ内経過時間を更新
             if done:
-                pyautogui.keyDown('r')
-                pyautogui.keyUp('r')
-                conn.close()
                 break
+        reset_env()
+        conn.close()
+            
         rewards.append(total_reward)
         if len(agent.memory) > batch_size:
             agent.replay(batch_size)
         print(f"Episode {e+1}/{episodes} - Reward: {total_reward}")
-
     server_socket.close()
 
     # 結果をグラフで表示
