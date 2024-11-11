@@ -93,11 +93,21 @@ initial_inGameSec = None  # 初期のinGameSecの値を記録する変数
 # メインの強化学習ループ
 if __name__ == "__main__":
 
+    # 学習条件
     pyautogui.FAILSAFE = False
     agent = DQNAgent()
     episodes = 500      # 学習回数
     batch_size = 32
     rewards = []
+
+    # ゲーム内終了条件
+    under_limit = 500
+    keep_time = 2
+
+    # 終了した回数カウンタ
+    low_speed_n = 0
+    time_over_n = 0
+
 
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.bind(('127.0.0.1', 1234))
@@ -140,14 +150,15 @@ if __name__ == "__main__":
                 print(f"S通過:{reward}, 時間:{next_env_info[0] - time_passed}")
                 time_passed = next_env_info[0]
             
-            # next_state_info[12] が500以下になった時点の inGameSec を記録
-            if next_env_info[12] >= 500:
+            # next_state_info[12] がunder_limit以下になった時点の inGameSec を記録
+            if next_env_info[12] >= under_limit:
                 initial_inGameSec = inGameSec
 
             # inGameSec が3増えたかどうかをチェック
-            if initial_inGameSec is not None and inGameSec - initial_inGameSec >= 3:
+            if initial_inGameSec is not None and inGameSec - initial_inGameSec >= keep_time:
                 done = True
                 print("一定時間停止していました")
+
 
             if next_env_info[19] == 1:
                 done = True
@@ -171,3 +182,4 @@ if __name__ == "__main__":
     # 結果をグラフで表示
     df = pd.DataFrame(rewards, columns=['Total Reward'])
     df.plot(title='Total Rewards per Episode')
+    print(f"停止回数:{low_speed_n}, 時間超過:{time_over_n}")
