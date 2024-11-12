@@ -2,6 +2,7 @@ import socket
 import numpy as np
 import pyautogui
 import pandas as pd
+import matplotlib.pyplot as plt
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
@@ -96,17 +97,20 @@ if __name__ == "__main__":
     # 学習条件
     pyautogui.FAILSAFE = False
     agent = DQNAgent()
-    episodes = 500      # 学習回数
-    batch_size = 32
-    rewards = []
+
+    from valuables import EPISODES,BATCH_SIZE
+    episodes = EPISODES      # 学習回数
+    batch_size = BATCH_SIZE
 
     # ゲーム内終了条件
     under_limit = 500
     keep_time = 2
 
-    # 終了した回数カウンタ
-    low_speed_n = 0
-    time_over_n = 0
+    #データ保存用
+    rewards = []        # 最終スコア(報酬)
+    times_finished = []  # エピソード終了時タイム
+    low_speed_n = 0     # 停止によるエピソード終了回数
+    time_over_n = 0     # 制限時間によるエピソード終了回数
 
 
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -174,12 +178,31 @@ if __name__ == "__main__":
         conn.close()
             
         rewards.append(total_reward)
+        times_finished.append(inGameSec)
         if len(agent.memory) > batch_size:
             agent.replay(batch_size)
         print(f"Episode {e+1}/{episodes} - Reward: {total_reward}")
     server_socket.close()
 
-    # 結果をグラフで表示
-    df = pd.DataFrame(rewards, columns=['Total Reward'])
-    df.plot(title='Total Rewards per Episode')
-    print(f"停止回数:{low_speed_n}, 時間超過:{time_over_n}")
+   # 結果をグラフで表示
+    fig, ax1 = plt.subplots()
+
+    color = "tab:blue"
+    ax1.set_xlabel("Episode")
+    ax1.set_ylabel("Total Reward")
+    ax1.plot(rewards, color=color)
+    ax1.tick_params(axis="y", labelcolor=color)
+
+    ax2 = ax1.twinx()
+    color = "tab:red"
+    ax2.set_ylabel("Finish Time", color=color)
+    ax2.plot(times_finished, color=color)
+    ax2.tick_params(axis="y", labelcolor=color)
+
+    plt.title("Progress of Learning")  # 修正箇所
+
+    plt.savefig(".png")
+
+    df = pd.DataFrame({"Total Reward": rewards, "Time Finished": times_finished})
+    df.to_csv('progress.csv', index=False)
+
