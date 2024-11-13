@@ -162,3 +162,4 @@ cython_debug/
 # 実験結果と実験用変数
 results/
 valuables.py
+sandbox.py
