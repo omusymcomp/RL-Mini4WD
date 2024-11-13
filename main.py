@@ -9,18 +9,25 @@ from tensorflow.keras.layers import Dense
 from collections import deque
 import random
 from datetime import datetime
+from time import sleep
+import csv
+import os
+
+# 同一ディレクトリの別ファイルからロード
+import valuables
+
 
 # DQNエージェントの定義
 class DQNAgent:
     def __init__(self):
-        self.state_size = 9
+        self.state_size = 10
         self.action_size = 2
-        self.memory = deque(maxlen=2000)
-        self.gamma = 0.95
-        self.epsilon = 1.0
-        self.epsilon_min = 0.01
-        self.epsilon_decay = 0.995
-        self.learning_rate = 0.001
+        self.memory = deque(maxlen=valuables.MEMORY_LEN)
+        self.gamma = valuables.GAMMA
+        self.epsilon = valuables.EPSILON
+        self.epsilon_min = valuables.EPSILON_MIN
+        self.epsilon_decay = valuables.EPSILON_DECAY
+        self.learning_rate = valuables.LERNING_RATE
         self.model = self._build_model()
 
     def _build_model(self):
@@ -85,14 +92,18 @@ def ignore_initial_data(conn, buffer, num_ignores=5):
 
 # シム内環境をリセット
 def reset_env():
-        pyautogui.keyDown('r')
-        pyautogui.keyUp('r')
+        gamepad.press_button(button=vg.XUSB_BUTTON.XUSB_GAMEPAD_X)
+        gamepad.update()
+        sleep(0.1)
+        gamepad.release_button(button=vg.XUSB_BUTTON.XUSB_GAMEPAD_X)
+        gamepad.update()
 
 # 変数の初期化
 initial_inGameSec = None  # 初期のinGameSecの値を記録する変数
 
 # メインの強化学習ループ
 if __name__ == "__main__":
+
 
     # 稼働時刻を記録
     start_time = datetime.now()
@@ -101,12 +112,14 @@ if __name__ == "__main__":
     gamepad = vg.VX360Gamepad()
 
     # 学習条件
-    pyautogui.FAILSAFE = False
     agent = DQNAgent()
 
-    from valuables import EPISODES,BATCH_SIZE,DIR
-    episodes = EPISODES      # 学習回数
-    batch_size = BATCH_SIZE
+    episodes = valuables.EPISODES      # 学習回数
+    batch_size = valuables.BATCH_SIZE
+
+    # 前回の一時保存データを削除
+    if os.path.exists(valuables.DIR+"temp.csv"):
+        os.remove(valuables.DIR+"temp.csv")
 
     # ゲーム内終了条件
     under_limit = 500
@@ -134,7 +147,7 @@ if __name__ == "__main__":
         buffer = ignore_initial_data(conn, buffer)
 
         env_info, buffer = get_environment_info(conn, buffer)
-        state = np.array(env_info[1:10]).reshape(1, -1)
+        state = np.array(env_info[0:10]).reshape(1, -1)
         total_reward = 0
         time_passed = 0
 
@@ -144,16 +157,16 @@ if __name__ == "__main__":
 
         while inGameSec <= 60:  # 最大ゲーム内時間
             action = agent.act(state)
-            if action == 1:
-                # Aボタンを押す
+            if action == 1: # Aボタンを押す
+                
                 gamepad.press_button(button=vg.XUSB_BUTTON.XUSB_GAMEPAD_A)
                 gamepad.update()
-            else:
+            else:           # Aボタンを離す
                 gamepad.release_button(button=vg.XUSB_BUTTON.XUSB_GAMEPAD_A)
                 gamepad.update()
             
             next_env_info, buffer = get_environment_info(conn, buffer)
-            next_state = np.array(next_env_info[1:10]).reshape(1, -1)
+            next_state = np.array(next_env_info[0:10]).reshape(1, -1)
             reward = 0
             done = False
 
@@ -163,7 +176,7 @@ if __name__ == "__main__":
                 print(f"{next_env_info[20]:.0f}S通過:{reward:.3f}, 時間:{(next_env_info[0] - time_passed):.3f}")
                 time_passed = next_env_info[0]
             
-            # next_state_info[12] がunder_limit以下になった時点の inGameSec を記録w
+            # next_state_info[12] がunder_limit以下になった時点の inGameSec を記録
 
             if next_env_info[12] >= under_limit:
                 initial_inGameSec = inGameSec
@@ -185,9 +198,20 @@ if __name__ == "__main__":
             if done:
                 break
         conn.close()
-            
+
+        gamepad.release_button(button=vg.XUSB_BUTTON.XUSB_GAMEPAD_A)
+        gamepad.update()
+
+        # 途中経過記録    
         rewards.append(total_reward)
         times_finished.append(inGameSec)
+        with open(valuables.DIR+"temp.csv", mode="a", newline="") as file:
+            writer = csv.writer(file)
+            spend_time = datetime.now() - start_time
+            hours, remainder = divmod(spend_time.total_seconds(), 3600)
+            minutes, seconds = divmod(remainder, 60)
+            writer.writerow([inGameSec, total_reward,f"{hours:.0f}h {minutes:.0f}min {seconds:.0f}s"])
+
         if len(agent.memory) > batch_size:
             agent.replay(batch_size)
         print(f"Episode {e+1}/{episodes} - Reward: {total_reward}")
@@ -214,10 +238,10 @@ if __name__ == "__main__":
 
     plt.title("Progress of Learning")  # 修正箇所
 
-    plt.savefig(DIR+f"{start_time.strftime('%Y%m%d_%H%M%S')}.png")
+    plt.savefig(valuables.DIR+f"{start_time.strftime('%Y%m%d_%H%M%S')}.png")
 
     df = pd.DataFrame({"Total Reward": rewards, "Time Finished": times_finished})
-    df.to_csv(DIR+f"{start_time.strftime('%Y%m%d_%H%M%S')}.csv", index=False)
+    df.to_csv(valuables.DIR+f"{start_time.strftime('%Y%m%d_%H%M%S')}.csv", index=False)
 
     elapsed_time = end_time - start_time
     hours, remainder = divmod(elapsed_time.total_seconds(), 3600)
