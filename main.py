@@ -1,6 +1,6 @@
 import socket
 import numpy as np
-import pyautogui
+import vgamepad as vg
 import pandas as pd
 import matplotlib.pyplot as plt
 import tensorflow as tf
@@ -97,6 +97,9 @@ if __name__ == "__main__":
     # 稼働時刻を記録
     start_time = datetime.now()
 
+    # 仮想コントローラ接続
+    gamepad = vg.VX360Gamepad()
+
     # 学習条件
     pyautogui.FAILSAFE = False
     agent = DQNAgent()
@@ -142,9 +145,12 @@ if __name__ == "__main__":
         while inGameSec <= 60:  # 最大ゲーム内時間
             action = agent.act(state)
             if action == 1:
-                pyautogui.keyDown('w')
+                # Aボタンを押す
+                gamepad.press_button(button=vg.XUSB_BUTTON.XUSB_GAMEPAD_A)
+                gamepad.update()
             else:
-                pyautogui.keyUp('w')
+                gamepad.release_button(button=vg.XUSB_BUTTON.XUSB_GAMEPAD_A)
+                gamepad.update()
             
             next_env_info, buffer = get_environment_info(conn, buffer)
             next_state = np.array(next_env_info[1:10]).reshape(1, -1)
@@ -158,6 +164,7 @@ if __name__ == "__main__":
                 time_passed = next_env_info[0]
             
             # next_state_info[12] がunder_limit以下になった時点の inGameSec を記録w
+
             if next_env_info[12] >= under_limit:
                 initial_inGameSec = inGameSec
 
