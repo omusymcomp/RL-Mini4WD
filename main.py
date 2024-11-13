@@ -8,7 +8,7 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
 from collections import deque
 import random
-import time
+from datetime import datetime
 
 # DQNエージェントの定義
 class DQNAgent:
@@ -94,11 +94,14 @@ initial_inGameSec = None  # 初期のinGameSecの値を記録する変数
 # メインの強化学習ループ
 if __name__ == "__main__":
 
+    # 稼働時刻を記録
+    start_time = datetime.now()
+
     # 学習条件
     pyautogui.FAILSAFE = False
     agent = DQNAgent()
 
-    from valuables import EPISODES,BATCH_SIZE
+    from valuables import EPISODES,BATCH_SIZE,DIR
     episodes = EPISODES      # 学習回数
     batch_size = BATCH_SIZE
 
@@ -151,10 +154,10 @@ if __name__ == "__main__":
             if next_env_info[20] != env_info[20]:  # セクション名が変わったら
                 reward = 10 / (next_env_info[0] - time_passed)
                 total_reward += reward
-                print(f"S通過:{reward}, 時間:{next_env_info[0] - time_passed}")
+                print(f"{next_env_info[20]:.0f}S通過:{reward:.3f}, 時間:{(next_env_info[0] - time_passed):.3f}")
                 time_passed = next_env_info[0]
             
-            # next_state_info[12] がunder_limit以下になった時点の inGameSec を記録
+            # next_state_info[12] がunder_limit以下になった時点の inGameSec を記録w
             if next_env_info[12] >= under_limit:
                 initial_inGameSec = inGameSec
 
@@ -174,7 +177,6 @@ if __name__ == "__main__":
             inGameSec = next_env_info[0]  # シミュレータ内経過時間を更新
             if done:
                 break
-        reset_env()
         conn.close()
             
         rewards.append(total_reward)
@@ -182,7 +184,11 @@ if __name__ == "__main__":
         if len(agent.memory) > batch_size:
             agent.replay(batch_size)
         print(f"Episode {e+1}/{episodes} - Reward: {total_reward}")
+        reset_env()
+
     server_socket.close()
+
+    end_time = datetime.now()
 
    # 結果をグラフで表示
     fig, ax1 = plt.subplots()
@@ -201,8 +207,13 @@ if __name__ == "__main__":
 
     plt.title("Progress of Learning")  # 修正箇所
 
-    plt.savefig(".png")
+    plt.savefig(DIR+f"{start_time.strftime('%Y%m%d_%H%M%S')}.png")
 
     df = pd.DataFrame({"Total Reward": rewards, "Time Finished": times_finished})
-    df.to_csv('progress.csv', index=False)
+    df.to_csv(DIR+f"{start_time.strftime('%Y%m%d_%H%M%S')}.csv", index=False)
+
+    elapsed_time = end_time - start_time
+    hours, remainder = divmod(elapsed_time.total_seconds(), 3600)
+    minutes, seconds = divmod(remainder, 60)
+    print(f"プログラムの稼働時間: {int(hours)}時間 {int(minutes)}分 {seconds:.2f}秒")
 
