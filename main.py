@@ -157,7 +157,7 @@ if __name__ == "__main__":
         inGameSec = env_info[0]  # シミュレータ内経過時間
         initial_inGameSec = None  # 初期のinGameSecの値を記録する変数
 
-        while inGameSec <= 60:  # 最大ゲーム内時間
+        while True: # エピソード進行中の処理
             action = agent.act(state)   # 行動の意思決定
             if action == 1: # Aボタンを押す
                 
@@ -170,32 +170,34 @@ if __name__ == "__main__":
             next_env_info, buffer = get_environment_info(conn, buffer)
             next_state = np.array(next_env_info[0:10]).reshape(1, -1)
             reward = 0
-            done = False
+            done = 0    # 0:未完走, 1:完走, それ以外:なんらかで強制終了
             
             # 速度に比例して報酬を渡す
             reward = next_env_info[12]/1000
             total_reward += reward
-            
-            # next_state_info[12] がunder_limit以下になった時点の inGameSec を記録
-
-            if next_env_info[12] >= under_limit:
-                initial_inGameSec = inGameSec
-
-            # inGameSec が3増えたかどうかをチェック
-            if initial_inGameSec is not None and inGameSec - initial_inGameSec >= keep_time:
-                done = True
-                print("一定時間停止していました")
-
 
             if next_env_info[19] == 1:
-                done = True
+                done = 1
                 print("完走しました")
+
+            # 3秒以上速度がunder_limitを下回ると強制終了
+            if next_env_info[12] >= under_limit:    # next_state_info[12] がunder_limit以下になった時点の inGameSec を記録
+                initial_inGameSec = inGameSec            
+            if initial_inGameSec is not None and inGameSec - initial_inGameSec >= keep_time:    # inGameSec が3増えたかどうかをチェック
+                done = 2
+                print("一定時間停止していました")
+
+            # 全体で60秒を超過した場合に強制終了
+            if inGameSec <= 60:
+                done = 3
+                print("時間がかかり過ぎました")
+
 
             agent.remember(state, action, reward, next_state, done)
             state = next_state
             env_info = next_env_info
             inGameSec = next_env_info[0]  # シミュレータ内経過時間を更新
-            if done:
+            if done != 0:
                 break
         conn.close()
 
@@ -210,7 +212,7 @@ if __name__ == "__main__":
             spend_time = datetime.now() - start_time
             hours, remainder = divmod(spend_time.total_seconds(), 3600)
             minutes, seconds = divmod(remainder, 60)
-            writer.writerow([inGameSec, total_reward,f"{hours:.0f}h {minutes:.0f}min {seconds:.0f}s"])
+            writer.writerow([inGameSec, total_reward,done,f"{hours:.0f}h {minutes:.0f}min {seconds:.0f}s"])
 
         if len(agent.memory) > batch_size:
             agent.replay(batch_size)
