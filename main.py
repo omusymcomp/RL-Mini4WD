@@ -19,6 +19,7 @@ import valuables
 
 # DQNエージェントの定義
 class DQNAgent:
+    # 初期設定
     def __init__(self):
         self.state_size = 10
         self.action_size = 2
@@ -30,6 +31,7 @@ class DQNAgent:
         self.learning_rate = valuables.LERNING_RATE
         self.model = self._build_model()
 
+    # NNモデル定義
     def _build_model(self):
         model = Sequential()
         model.add(Dense(256, input_dim=self.state_size, activation='relu'))
@@ -156,7 +158,7 @@ if __name__ == "__main__":
         initial_inGameSec = None  # 初期のinGameSecの値を記録する変数
 
         while inGameSec <= 60:  # 最大ゲーム内時間
-            action = agent.act(state)
+            action = agent.act(state)   # 行動の意思決定
             if action == 1: # Aボタンを押す
                 
                 gamepad.press_button(button=vg.XUSB_BUTTON.XUSB_GAMEPAD_A)
@@ -169,12 +171,10 @@ if __name__ == "__main__":
             next_state = np.array(next_env_info[0:10]).reshape(1, -1)
             reward = 0
             done = False
-
-            if next_env_info[20] != env_info[20]:  # セクション名が変わったら
-                reward = 10 / (next_env_info[0] - time_passed)
-                total_reward += reward
-                print(f"{next_env_info[20]:.0f}S通過:{reward:.3f}, 時間:{(next_env_info[0] - time_passed):.3f}")
-                time_passed = next_env_info[0]
+            
+            # 速度に比例して報酬を渡す
+            reward = next_env_info[12]/1000
+            total_reward += reward
             
             # next_state_info[12] がunder_limit以下になった時点の inGameSec を記録
 

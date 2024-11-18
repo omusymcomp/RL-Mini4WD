@@ -1,6 +1,6 @@
 # 学習実験用変数
 
-EPISODES = 5         # エピソード数
+EPISODES = 100         # エピソード数
 BATCH_SIZE = 256        # バッチサイズ
 
 MEMORY_LEN = 3600       # 経験保存ステップ数
