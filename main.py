@@ -30,6 +30,7 @@ class DQNAgent:
         self.epsilon_decay = valuables.EPSILON_DECAY
         self.learning_rate = valuables.LERNING_RATE
         self.model = self._build_model()
+        self.qv = [0,0]
 
     # NNモデル定義
     def _build_model(self):
@@ -50,13 +51,19 @@ class DQNAgent:
         return np.argmax(act_values[0])
 
     def replay(self, batch_size):
+        if len(self.memory) < batch_size:
+            return
         minibatch = random.sample(self.memory, batch_size)
         for state, action, reward, next_state, done in minibatch:
             target = reward
             if not done:
                 target = (reward + self.gamma * np.amax(self.model.predict(next_state)[0]))
+                print(f"将来の予測: {self.model.predict(next_state)}")
             target_f = self.model.predict(state)
+            print(action, reward)
+            print(target_f)
             target_f[0][action] = target
+            print(target_f)
             self.model.fit(state, target_f, epochs=1, verbose=0)
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
@@ -142,6 +149,9 @@ if __name__ == "__main__":
         print(f"Waiting for connection for episode {e+1}...")
         conn, addr = server_socket.accept()
         print(f"Connected by {addr}")
+        
+        recieved = np.empty((0, 10))
+
 
         buffer = ""  # バッファの初期化
 
@@ -157,24 +167,27 @@ if __name__ == "__main__":
         inGameSec = env_info[0]  # シミュレータ内経過時間
         initial_inGameSec = None  # 初期のinGameSecの値を記録する変数
 
+        count = 0
         while True: # エピソード進行中の処理
+            recieved = np.vstack([recieved, state])
+            count += 1
+            reward = 0  # 報酬初期化
             action = agent.act(state)   # 行動の意思決定
-            if action == 1: # Aボタンを押す
-                
+            if action == 1: # Aボタンを押す                
                 gamepad.press_button(button=vg.XUSB_BUTTON.XUSB_GAMEPAD_A)
                 gamepad.update()
-            else:           # Aボタンを離す
+                reward = 1
+                total_reward += reward
+
+            elif action == 0:           # Aボタンを離す
                 gamepad.release_button(button=vg.XUSB_BUTTON.XUSB_GAMEPAD_A)
                 gamepad.update()
             
+
             next_env_info, buffer = get_environment_info(conn, buffer)
             next_state = np.array(next_env_info[0:10]).reshape(1, -1)
-            reward = 0
+
             done = 0    # 0:未完走, 1:完走, それ以外:なんらかで強制終了
-            
-            # 速度に比例して報酬を渡す
-            reward = next_env_info[12]/1000
-            total_reward += reward
 
             if next_env_info[19] == 1:
                 done = 1
@@ -188,9 +201,10 @@ if __name__ == "__main__":
                 print("一定時間停止していました")
 
             # 全体で60秒を超過した場合に強制終了
-            if inGameSec <= 60:
+            if 60 <= inGameSec:
                 done = 3
                 print("時間がかかり過ぎました")
+
 
 
             agent.remember(state, action, reward, next_state, done)
@@ -200,6 +214,26 @@ if __name__ == "__main__":
             if done != 0:
                 break
         conn.close()
+
+        # データの確認用
+        # Plotting the data
+        plt.figure(figsize=(20, 6))
+
+        # Plot each dimension (1 to 4) against the first dimension (0)
+        for dim in range(1, 4):
+            plt.plot(recieved[:, 0], recieved[:, dim], label=f'Dimension {dim}')
+
+        plt.xlabel('Time[s]')
+        plt.ylabel('Values')
+        plt.title('Acceratation 1=x, 2=y, 3=z')
+        plt.legend()
+        plt.grid(True)
+
+        # Save the plot as a PNG file
+        plt.savefig(valuables.DIR+f"{count}.png")
+        plt.close()
+
+        ## データ確認ここまで
 
         gamepad.release_button(button=vg.XUSB_BUTTON.XUSB_GAMEPAD_A)
         gamepad.update()
@@ -212,7 +246,7 @@ if __name__ == "__main__":
             spend_time = datetime.now() - start_time
             hours, remainder = divmod(spend_time.total_seconds(), 3600)
             minutes, seconds = divmod(remainder, 60)
-            writer.writerow([inGameSec, total_reward,done,f"{hours:.0f}h {minutes:.0f}min {seconds:.0f}s"])
+            writer.writerow([f"{inGameSec:.2f}", count, total_reward,done, f"{hours:.0f}h {minutes:.0f}min {seconds:.0f}s"])
 
         if len(agent.memory) > batch_size:
             agent.replay(batch_size)
