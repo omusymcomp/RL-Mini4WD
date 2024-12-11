@@ -42,6 +42,10 @@ class DQNAgent:
         return model
 
     def remember(self, state, action, reward, next_state, done):
+        state[0] = np.sin(state[0]/10)      #時間情報をsinに変形
+        state[1:4] = state[1:4] / 9800     #加速度のZスコア(平均を0とする)
+        state[4:7] = state[4:7] / 150       #角速度のzスコア(平均を0とする)
+        print(state)
         self.memory.append((state, action, reward, next_state, done))
 
     def act(self, state):
@@ -201,7 +205,7 @@ if __name__ == "__main__":
                 print("一定時間停止していました")
 
             # 全体で60秒を超過した場合に強制終了
-            if 60 <= inGameSec:
+            if 30 <= inGameSec:
                 done = 3
                 print("時間がかかり過ぎました")
 
