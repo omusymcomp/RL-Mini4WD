@@ -45,7 +45,6 @@ class DQNAgent:
         state[0] = np.sin(state[0]/10)      #時間情報をsinに変形
         state[1:4] = state[1:4] / 9800     #加速度のZスコア(平均を0とする)
         state[4:7] = state[4:7] / 150       #角速度のzスコア(平均を0とする)
-        print(state)
         self.memory.append((state, action, reward, next_state, done))
 
     def act(self, state):
@@ -62,12 +61,8 @@ class DQNAgent:
             target = reward
             if not done:
                 target = (reward + self.gamma * np.amax(self.model.predict(next_state)[0]))
-                print(f"将来の予測: {self.model.predict(next_state)}")
             target_f = self.model.predict(state)
-            print(action, reward)
-            print(target_f)
             target_f[0][action] = target
-            print(target_f)
             self.model.fit(state, target_f, epochs=1, verbose=0)
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
@@ -204,7 +199,7 @@ if __name__ == "__main__":
                 done = 2
                 print("一定時間停止していました")
 
-            # 全体で60秒を超過した場合に強制終了
+            # シム内時刻が一定を超過した場合に強制終了
             if 30 <= inGameSec:
                 done = 3
                 print("時間がかかり過ぎました")
@@ -218,26 +213,6 @@ if __name__ == "__main__":
             if done != 0:
                 break
         conn.close()
-
-        # データの確認用
-        # Plotting the data
-        plt.figure(figsize=(20, 6))
-
-        # Plot each dimension (1 to 4) against the first dimension (0)
-        for dim in range(1, 4):
-            plt.plot(recieved[:, 0], recieved[:, dim], label=f'Dimension {dim}')
-
-        plt.xlabel('Time[s]')
-        plt.ylabel('Values')
-        plt.title('Acceratation 1=x, 2=y, 3=z')
-        plt.legend()
-        plt.grid(True)
-
-        # Save the plot as a PNG file
-        plt.savefig(valuables.DIR+f"{count}.png")
-        plt.close()
-
-        ## データ確認ここまで
 
         gamepad.release_button(button=vg.XUSB_BUTTON.XUSB_GAMEPAD_A)
         gamepad.update()
