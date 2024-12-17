@@ -100,14 +100,10 @@ def ignore_initial_data(conn, buffer, num_ignores=5):
 
 # シム内環境をリセット
 def reset_env():
-        gamepad.press_button(button=vg.XUSB_BUTTON.XUSB_GAMEPAD_X)
-        gamepad.update()
-        sleep(0.1)
-        gamepad.release_button(button=vg.XUSB_BUTTON.XUSB_GAMEPAD_X)
-        gamepad.update()
+    conn.sendall("true".encode("utf-8"))
 
-# 変数の初期化
-initial_inGameSec = None  # 初期のinGameSecの値を記録する変数
+def change_throttle(duty):
+    conn.sendall(f"{duty}".encode("utf-8"))
 
 # メインの強化学習ループ
 if __name__ == "__main__":
@@ -165,6 +161,7 @@ if __name__ == "__main__":
         # 変数の初期化
         inGameSec = env_info[0]  # シミュレータ内経過時間
         initial_inGameSec = None  # 初期のinGameSecの値を記録する変数
+        sum_speed = 0
 
         count = 0
         while True: # エピソード進行中の処理
@@ -172,19 +169,20 @@ if __name__ == "__main__":
             count += 1
             reward = 0  # 報酬初期化
             action = agent.act(state)   # 行動の意思決定
-            if action == 1: # Aボタンを押す                
-                gamepad.press_button(button=vg.XUSB_BUTTON.XUSB_GAMEPAD_A)
-                gamepad.update()
-                reward = 1
+            if action == 1:         
+                change_throttle(1)  
+                reward += 1
                 total_reward += reward
 
-            elif action == 0:           # Aボタンを離す
-                gamepad.release_button(button=vg.XUSB_BUTTON.XUSB_GAMEPAD_A)
-                gamepad.update()
+            elif action == 0:           
+                change_throttle(0)
             
 
             next_env_info, buffer = get_environment_info(conn, buffer)
             next_state = np.array(next_env_info[0:10]).reshape(1, -1)
+
+            # 評価関数用
+            sum_speed += next_env_info[12]
 
             done = 0    # 0:未完走, 1:完走, それ以外:なんらかで強制終了
 
@@ -212,10 +210,10 @@ if __name__ == "__main__":
             inGameSec = next_env_info[0]  # シミュレータ内経過時間を更新
             if done != 0:
                 break
-        conn.close()
 
-        gamepad.release_button(button=vg.XUSB_BUTTON.XUSB_GAMEPAD_A)
-        gamepad.update()
+        change_throttle(0)      # EP終了時にスロットルを0に
+
+        evalulation = sum_speed / count
 
         # 途中経過記録    
         rewards.append(total_reward)
@@ -225,38 +223,61 @@ if __name__ == "__main__":
             spend_time = datetime.now() - start_time
             hours, remainder = divmod(spend_time.total_seconds(), 3600)
             minutes, seconds = divmod(remainder, 60)
-            writer.writerow([f"{inGameSec:.2f}", count, total_reward,done, f"{hours:.0f}h {minutes:.0f}min {seconds:.0f}s"])
+            writer.writerow([total_reward, evalulation, count, f"{inGameSec:.2f}", done, f"{hours:.0f}h {minutes:.0f}min {seconds:.0f}s"])
 
         if len(agent.memory) > batch_size:
             agent.replay(batch_size)
         print(f"Episode {e+1}/{episodes} - Reward: {total_reward}")
+
+        # 環境リセット
         reset_env()
+
 
     server_socket.close()
 
     end_time = datetime.now()
 
-   # 結果をグラフで表示
-    fig, ax1 = plt.subplots()
+    # 結果をグラフで表示
+    # データを読み込む
+    data = pd.read_csv(valuables.DIR + "temp.csv", header=None)
 
-    color = "tab:blue"
-    ax1.set_xlabel("Episode")
-    ax1.set_ylabel("Total Reward")
-    ax1.plot(rewards, color=color)
-    ax1.tick_params(axis="y", labelcolor=color)
+    # グラフを描画
+    fig, ax1 = plt.subplots(figsize=(10, 6))
+
+    ax1.set_xlabel('Episode')
+    ax1.set_ylabel('Finish Time', color='blue')
+    ax1.plot(data[0], label="Finish Time", color='blue')
+    ax1.tick_params(axis='y', labelcolor='blue')
 
     ax2 = ax1.twinx()
-    color = "tab:red"
-    ax2.set_ylabel("Finish Time", color=color)
-    ax2.plot(times_finished, color=color)
-    ax2.tick_params(axis="y", labelcolor=color)
+    ax2.set_ylabel('Total Reward', color='green')
+    ax2.plot(data[1], label="Total Reward", color='green')
+    ax2.tick_params(axis='y', labelcolor='green')
 
-    plt.title("Progress of Learning")  # 修正箇所
+    ax3 = ax1.twinx()
+    ax3.spines['right'].set_position(('outward', 60))
+    ax3.set_ylabel('Evaluation', color='red')
+    ax3.plot(data[3], label="Evaluation", color='red')
+    ax3.tick_params(axis='y', labelcolor='red')
 
-    plt.savefig(valuables.DIR+f"{start_time.strftime('%Y%m%d_%H%M%S')}.png")
+    ax4 = ax1.twinx()
+    ax4.spines['right'].set_position(('outward', 120))
+    ax4.set_ylabel('Finish Condition', color='purple')
+    ax4.plot(data[4], label="Finish Condition", color='purple')
+    ax4.tick_params(axis='y', labelcolor='purple')
+    ax4.set_ylim(0, 10)
 
-    df = pd.DataFrame({"Total Reward": rewards, "Time Finished": times_finished})
-    df.to_csv(valuables.DIR+f"{start_time.strftime('%Y%m%d_%H%M%S')}.csv", index=False)
+    # グラフのタイトルと凡例を設定
+    fig.suptitle("Training Progress")
+    fig.legend(loc="upper left", bbox_to_anchor=(0.1,0.9))
+    fig.tight_layout(rect=[0, 0.03, 1, 0.95])
+
+    # グラフを保存
+    plt.savefig(valuables.DIR + f"{start_time.strftime('%Y%m%d_%H%M%S')}.png")
+
+    data = pd.read_csv(valuables.DIR+"temp.csv", header=None)
+    data.columns = ["Total Reward", "Evaluation", "Total Steps", "Finish Time", "Finish Condition", "Time Spent"]
+    data.to_csv(valuables.DIR+f"{start_time.strftime('%Y%m%d_%H%M%S')}.csv", index=False)
 
     elapsed_time = end_time - start_time
     hours, remainder = divmod(elapsed_time.total_seconds(), 3600)
