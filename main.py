@@ -14,7 +14,7 @@ import csv
 import os
 
 # 同一ディレクトリの別ファイルからロード
-import valuables
+import valuables1 as val
 
 
 # DQNエージェントの定義
@@ -23,12 +23,12 @@ class DQNAgent:
     def __init__(self):
         self.state_size = 10
         self.action_size = 2
-        self.memory = deque(maxlen=valuables.MEMORY_LEN)
-        self.gamma = valuables.GAMMA
-        self.epsilon = valuables.EPSILON
-        self.epsilon_min = valuables.EPSILON_MIN
-        self.epsilon_decay = valuables.EPSILON_DECAY
-        self.learning_rate = valuables.LERNING_RATE
+        self.memory = deque(maxlen=val.MEMORY_LEN)
+        self.gamma = val.GAMMA
+        self.epsilon = val.EPSILON
+        self.epsilon_min = val.EPSILON_MIN
+        self.epsilon_decay = val.EPSILON_DECAY
+        self.learning_rate = val.LERNING_RATE
         self.model = self._build_model()
         self.qv = [0,0]
 
@@ -118,12 +118,12 @@ if __name__ == "__main__":
     # 学習条件
     agent = DQNAgent()
 
-    episodes = valuables.EPISODES      # 学習回数
-    batch_size = valuables.BATCH_SIZE
+    episodes = val.EPISODES      # 学習回数
+    batch_size = val.BATCH_SIZE
 
     # 前回の一時保存データを削除
-    if os.path.exists(valuables.DIR+"temp.csv"):
-        os.remove(valuables.DIR+"temp.csv")
+    if os.path.exists(val.DIR+"temp.csv"):
+        os.remove(val.DIR+"temp.csv")
 
     # ゲーム内終了条件
     under_limit = 500
@@ -137,7 +137,7 @@ if __name__ == "__main__":
 
 
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_socket.bind((valuables.IP, valuables.PORT))
+    server_socket.bind((val.IP, val.PORT))
     server_socket.listen(1)
 
     for e in range(episodes):
@@ -218,7 +218,7 @@ if __name__ == "__main__":
         # 途中経過記録    
         rewards.append(total_reward)
         times_finished.append(inGameSec)
-        with open(valuables.DIR+"temp.csv", mode="a", newline="") as file:
+        with open(val.DIR+"temp.csv", mode="a", newline="") as file:
             writer = csv.writer(file)
             spend_time = datetime.now() - start_time
             hours, remainder = divmod(spend_time.total_seconds(), 3600)
@@ -239,7 +239,7 @@ if __name__ == "__main__":
 
     # 結果をグラフで表示
     # データを読み込む
-    data = pd.read_csv(valuables.DIR + "temp.csv", header=None)
+    data = pd.read_csv(val.DIR + "temp.csv", header=None)
 
     # グラフを描画
     fig, ax1 = plt.subplots(figsize=(10, 6))
@@ -273,11 +273,11 @@ if __name__ == "__main__":
     fig.tight_layout(rect=[0, 0.03, 1, 0.95])
 
     # グラフを保存
-    plt.savefig(valuables.DIR + f"{start_time.strftime('%Y%m%d_%H%M%S')}.png")
+    plt.savefig(val.DIR + f"{start_time.strftime('%Y%m%d_%H%M%S')}.png")
 
-    data = pd.read_csv(valuables.DIR+"temp.csv", header=None)
+    data = pd.read_csv(val.DIR+"temp.csv", header=None)
     data.columns = ["Total Reward", "Evaluation", "Total Steps", "Finish Time", "Finish Condition", "Time Spent"]
-    data.to_csv(valuables.DIR+f"{start_time.strftime('%Y%m%d_%H%M%S')}.csv", index=False)
+    data.to_csv(val.DIR+f"{start_time.strftime('%Y%m%d_%H%M%S')}.csv", index=False)
 
     elapsed_time = end_time - start_time
     hours, remainder = divmod(elapsed_time.total_seconds(), 3600)
