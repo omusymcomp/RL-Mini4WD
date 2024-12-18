@@ -1,6 +1,5 @@
 import socket
 import numpy as np
-import vgamepad as vg
 import pandas as pd
 import matplotlib.pyplot as plt
 import tensorflow as tf
@@ -115,9 +114,6 @@ if __name__ == "__main__":
 
     # 稼働時刻を記録
     start_time = datetime.now()
-
-    # 仮想コントローラ接続
-    gamepad = vg.VX360Gamepad()
 
     # 学習条件
     agent = DQNAgent()
