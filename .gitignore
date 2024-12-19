@@ -161,7 +161,7 @@ cython_debug/
 
 # 実験結果と実験用変数
 results/
-valuables*
+valuables*.py
 !valuables0.py
 main*.py
 !main0.py
