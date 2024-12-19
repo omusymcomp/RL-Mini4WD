@@ -247,25 +247,25 @@ if __name__ == "__main__":
     fig, ax1 = plt.subplots(figsize=(10, 6))
 
     ax1.set_xlabel('Episode')
-    ax1.set_ylabel('Finish Time', color='blue')
-    ax1.plot(data[0], label="Finish Time", color='blue')
+    ax1.set_ylabel(data.columns[0], color='blue')
+    ax1.plot(data[data.columns[0]], label=data.columns[0], color='blue')
     ax1.tick_params(axis='y', labelcolor='blue')
 
     ax2 = ax1.twinx()
-    ax2.set_ylabel('Total Reward', color='green')
-    ax2.plot(data[1], label="Total Reward", color='green')
+    ax2.set_ylabel(data.columns[1], color='green')
+    ax2.plot(data[data.columns[1]], label=data.columns[1], color='green')
     ax2.tick_params(axis='y', labelcolor='green')
 
     ax3 = ax1.twinx()
     ax3.spines['right'].set_position(('outward', 60))
-    ax3.set_ylabel('Evaluation', color='red')
-    ax3.plot(data[3], label="Evaluation", color='red')
+    ax3.set_ylabel(data.columns[3], color='red')
+    ax3.plot(data[data.columns[3]], label=data.columns[3], color='red')
     ax3.tick_params(axis='y', labelcolor='red')
 
     ax4 = ax1.twinx()
     ax4.spines['right'].set_position(('outward', 120))
-    ax4.set_ylabel('Finish Condition', color='purple')
-    ax4.plot(data[4], label="Finish Condition", color='purple')
+    ax4.set_ylabel(data.columns[4], color='purple')
+    ax4.plot(data[data.columns[4]], label=data.columns[4], color='purple')
     ax4.tick_params(axis='y', labelcolor='purple')
     ax4.set_ylim(0, 10)
 
