@@ -122,8 +122,8 @@ if __name__ == "__main__":
     batch_size = val.BATCH_SIZE
 
     # 前回の一時保存データを削除
-    if os.path.exists(val.DIR+"temp.csv"):
-        os.remove(val.DIR+"temp.csv")
+    if os.path.exists(val.DIR+f"temp{module_suffix}.csv"):
+        os.remove(val.DIR+f"temp{module_suffix}.csv")
 
     # ゲーム内終了条件
     under_limit = 500
@@ -218,7 +218,7 @@ if __name__ == "__main__":
         # 途中経過記録    
         rewards.append(total_reward)
         times_finished.append(inGameSec)
-        with open(val.DIR+"temp.csv", mode="a", newline="") as file:
+        with open(val.DIR+f"temp{module_suffix}.csv", mode="a", newline="") as file:
             writer = csv.writer(file)
             spend_time = datetime.now() - start_time
             hours, remainder = divmod(spend_time.total_seconds(), 3600)
@@ -238,32 +238,34 @@ if __name__ == "__main__":
     end_time = datetime.now()
 
     # 結果をグラフで表示
-    # データを読み込む
-    data = pd.read_csv(val.DIR + "temp.csv", header=None)
+    # 途中経過データを確定
+    data = pd.read_csv(val.DIR+f"temp{module_suffix}.csv", header=None)
+    data.columns = ["Total Reward", "Evaluation", "Total Steps", "Finish Time", "Finish Condition", "Time Spent"]
+    data.to_csv(val.DIR+f"{start_time.strftime('%Y%m%d_%H%M%S')}.csv", index=False)
 
     # グラフを描画
     fig, ax1 = plt.subplots(figsize=(10, 6))
 
     ax1.set_xlabel('Episode')
-    ax1.set_ylabel('Finish Time', color='blue')
-    ax1.plot(data[0], label="Finish Time", color='blue')
+    ax1.set_ylabel(data.columns[0], color='blue')
+    ax1.plot(data[data.columns[0]], label=data.columns[0], color='blue')
     ax1.tick_params(axis='y', labelcolor='blue')
 
     ax2 = ax1.twinx()
-    ax2.set_ylabel('Total Reward', color='green')
-    ax2.plot(data[1], label="Total Reward", color='green')
+    ax2.set_ylabel(data.columns[1], color='green')
+    ax2.plot(data[data.columns[1]], label=data.columns[1], color='green')
     ax2.tick_params(axis='y', labelcolor='green')
 
     ax3 = ax1.twinx()
     ax3.spines['right'].set_position(('outward', 60))
-    ax3.set_ylabel('Evaluation', color='red')
-    ax3.plot(data[3], label="Evaluation", color='red')
+    ax3.set_ylabel(data.columns[3], color='red')
+    ax3.plot(data[data.columns[3]], label=data.columns[3], color='red')
     ax3.tick_params(axis='y', labelcolor='red')
 
     ax4 = ax1.twinx()
     ax4.spines['right'].set_position(('outward', 120))
-    ax4.set_ylabel('Finish Condition', color='purple')
-    ax4.plot(data[4], label="Finish Condition", color='purple')
+    ax4.set_ylabel(data.columns[4], color='purple')
+    ax4.plot(data[data.columns[4]], label=data.columns[4], color='purple')
     ax4.tick_params(axis='y', labelcolor='purple')
     ax4.set_ylim(0, 10)
 
@@ -274,10 +276,6 @@ if __name__ == "__main__":
 
     # グラフを保存
     plt.savefig(val.DIR + f"{start_time.strftime('%Y%m%d_%H%M%S')}.png")
-
-    data = pd.read_csv(val.DIR+"temp.csv", header=None)
-    data.columns = ["Total Reward", "Evaluation", "Total Steps", "Finish Time", "Finish Condition", "Time Spent"]
-    data.to_csv(val.DIR+f"{start_time.strftime('%Y%m%d_%H%M%S')}.csv", index=False)
 
     elapsed_time = end_time - start_time
     hours, remainder = divmod(elapsed_time.total_seconds(), 3600)
