@@ -172,17 +172,17 @@ if __name__ == "__main__":
             if action == 1:         
                 change_throttle(1)  
                 reward += 1
-                total_reward += reward
-
             elif action == 0:           
                 change_throttle(0)
             
+
 
             next_env_info, buffer = get_environment_info(conn, buffer)
             next_state = np.array(next_env_info[0:10]).reshape(1, -1)
 
             # 評価関数用
             sum_speed += next_env_info[12]
+            reward += next_env_info[12] #現在速度を報酬に加算
 
             done = 0    # 0:未完走, 1:完走, それ以外:なんらかで強制終了
 
@@ -195,6 +195,7 @@ if __name__ == "__main__":
                 initial_inGameSec = inGameSec            
             if initial_inGameSec is not None and inGameSec - initial_inGameSec >= keep_time:    # inGameSec が3増えたかどうかをチェック
                 done = 2
+                reward -= val.C_W
                 print("一定時間停止していました")
 
             # シム内時刻が一定を超過した場合に強制終了
@@ -203,7 +204,7 @@ if __name__ == "__main__":
                 print("時間がかかり過ぎました")
 
 
-
+            total_reward += reward
             agent.remember(state, action, reward, next_state, done)
             state = next_state
             env_info = next_env_info
