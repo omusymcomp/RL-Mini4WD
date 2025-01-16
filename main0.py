@@ -8,7 +8,6 @@ from tensorflow.keras.layers import Dense
 from collections import deque
 import random
 from datetime import datetime
-from time import sleep
 import csv
 import os
 
@@ -31,7 +30,7 @@ class DQNAgent:
         self.epsilon = val.EPSILON
         self.epsilon_min = val.EPSILON_MIN
         self.epsilon_decay = val.EPSILON_DECAY
-        self.learning_rate = val.LERNING_RATE
+        self.learning_rate = val.LEARNING_RATE
         self.model = self._build_model()
         self.qv = [0,0]
 
@@ -45,15 +44,12 @@ class DQNAgent:
         return model
 
     def remember(self, state, action, reward, next_state, done):
-        state[0] = np.sin(state[0]/10)      #時間情報をsinに変形
-        state[1:4] = state[1:4] / 9800     #加速度のZスコア(平均を0とする)
-        state[4:7] = state[4:7] / 150       #角速度のzスコア(平均を0とする)
         self.memory.append((state, action, reward, next_state, done))
 
     def act(self, state):
         if np.random.rand() <= self.epsilon:
             return random.randrange(self.action_size)
-        act_values = self.model.predict(state)
+        act_values = self.model.predict(state.reshape(1, -1))
         return np.argmax(act_values[0])
 
     def replay(self, batch_size):
@@ -69,11 +65,49 @@ class DQNAgent:
             self.model.fit(state, target_f, epochs=1, verbose=0)
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
-
-# 環境から情報を取得する関数
-def get_environment_info(conn, buffer):
-    float_indices = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 19, 20}
     
+    def save(self, filepath):
+        self.model.save_weights(filepath + "best_model.h5")
+
+
+class EnvironmentInfo:
+    def __init__(self, env_info=None):
+        if env_info is None:
+            env_info = [0] * 26  # デフォルト値として0のリストを使用
+        self.Time = self._to_float(env_info[0])
+        self.Acceleration_x = self._to_float(env_info[1])
+        self.Acceleration_y = self._to_float(env_info[2])
+        self.Acceleration_z = self._to_float(env_info[3])
+        self.AngularVelocity_roll = self._to_float(env_info[4])
+        self.AngularVelocity_pitch = self._to_float(env_info[5])
+        self.AngularVelocity_yaw = self._to_float(env_info[6])
+        self.MagneticForce_x = self._to_float(env_info[7])
+        self.MagneticForce_y = self._to_float(env_info[8])
+        self.MagneticForce_z = self._to_float(env_info[9])
+        self.GroundReflection1 = self._to_float(env_info[10])
+        self.GroundReflection2 = self._to_float(env_info[11])
+        self.CurrentVelocity = self._to_float(env_info[12])
+        self.TargetVelocity = self._to_float(env_info[13])
+        self.RevolutionCounter1 = self._to_float(env_info[14])
+        self.RevolutionCounter2 = self._to_float(env_info[15])
+        self.BatteryVoltage = self._to_float(env_info[16])
+        self.MotorCurrent = self._to_float(env_info[17])
+        self.GeoMapping = str(env_info[18]) if env_info[18] else ""
+        self.Lap = self._to_float(env_info[19])
+        self.Section = self._to_float(env_info[20])
+        self.CPUTemp = self._to_float(env_info[21])
+        self.MotorTemp = self._to_float(env_info[22])
+        self.WorldLocation_x = self._to_float(env_info[23])
+        self.WorldLocation_y = self._to_float(env_info[24])
+        self.WorldLocation_z = self._to_float(env_info[25])
+
+    def _to_float(self, value):
+        try:
+            return float(value)
+        except ValueError:
+            return 0.0
+
+def get_environment_info(conn, buffer):
     while True:
         data = conn.recv(1024).decode('utf-8')
         buffer += data
@@ -82,15 +116,7 @@ def get_environment_info(conn, buffer):
             buffer = lines[-1]  # 最後の部分を次のバッファに残す
             for line in lines[:-1]:
                 if len(line) > 21 and line.strip():  # データが空でないことを確認
-                    result = []
-                    for i, x in enumerate(line.split(',')):
-                        if i in float_indices:
-                            try:
-                                result.append(float(x))
-                            except ValueError:
-                                result.append(0.0)
-                        else:
-                            result.append(x)
+                    result = line.split(',')
                     return result, buffer
 
 
@@ -102,10 +128,10 @@ def ignore_initial_data(conn, buffer, num_ignores=5):
     return buffer
 
 # シム内環境をリセット
-def reset_env():
+def reset_env(conn):
     conn.sendall("true".encode("utf-8"))
 
-def change_throttle(duty):
+def change_throttle(conn, duty):
     conn.sendall(f"{duty}".encode("utf-8"))
 
 # メインの強化学習ループ
@@ -117,7 +143,6 @@ if __name__ == "__main__":
 
     # 学習条件
     agent = DQNAgent()
-
     episodes = val.EPISODES      # 学習回数
     batch_size = val.BATCH_SIZE
 
@@ -125,16 +150,13 @@ if __name__ == "__main__":
     if os.path.exists(val.DIR+f"temp{module_suffix}.csv"):
         os.remove(val.DIR+f"temp{module_suffix}.csv")
 
-    # ゲーム内終了条件
-    under_limit = 500
-    keep_time = 2
-
     #データ保存用
     rewards = []        # 最終スコア(報酬)
     times_finished = []  # エピソード終了時タイム
     low_speed_n = 0     # 停止によるエピソード終了回数
     time_over_n = 0     # 制限時間によるエピソード終了回数
-
+    EnvNow = EnvironmentInfo()
+    EnvNext = EnvironmentInfo()
 
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.bind((val.IP, val.PORT))
@@ -144,8 +166,7 @@ if __name__ == "__main__":
         print(f"Waiting for connection({val.IP}:{val.PORT}) for episode {e+1}...")
         conn, addr = server_socket.accept()
         print(f"Connected by {addr}")
-        
-        recieved = np.empty((0, 10))
+
 
 
         buffer = ""  # バッファの初期化
@@ -154,84 +175,97 @@ if __name__ == "__main__":
         buffer = ignore_initial_data(conn, buffer)
 
         env_info, buffer = get_environment_info(conn, buffer)
-        state = np.array(env_info[0:10]).reshape(1, -1)
+        EnvNow = EnvironmentInfo(env_info)
+        state = np.array([EnvNow.Time, EnvNow.Acceleration_x, EnvNow.Acceleration_y, EnvNow.Acceleration_z, 
+                        EnvNow.AngularVelocity_roll, EnvNow.AngularVelocity_pitch, EnvNow.AngularVelocity_yaw, 
+                        EnvNow.MagneticForce_x, EnvNow.MagneticForce_y, EnvNow.MagneticForce_z]).reshape(1, -1)
+
         total_reward = 0
         time_passed = 0
 
         # 変数の初期化
-        inGameSec = env_info[0]  # シミュレータ内経過時間
         initial_inGameSec = None  # 初期のinGameSecの値を記録する変数
         sum_speed = 0
 
         count = 0
         while True: # エピソード進行中の処理
-            recieved = np.vstack([recieved, state])
             count += 1
             reward = 0  # 報酬初期化
+
+
             action = agent.act(state)   # 行動の意思決定
-            if action == 1:         
-                change_throttle(1)  
+            if action == 1:             # 行動実行
+                change_throttle(conn, 1)  
                 reward += 1
             elif action == 0:           
-                change_throttle(0)
-            
+                change_throttle(conn, 0)  
 
 
-            next_env_info, buffer = get_environment_info(conn, buffer)
-            next_state = np.array(next_env_info[0:10]).reshape(1, -1)
+            # 環境更新
+            EnvNext, buffer = get_environment_info(conn, buffer)
+            EnvNext = EnvironmentInfo(EnvNext)
+
 
             # 評価関数用
-            sum_speed += next_env_info[12]
-            reward += next_env_info[12] #現在速度を報酬に加算
+            sum_speed += EnvNext.CurrentVelocity
+            reward += EnvNext.CurrentVelocity #現在速度を報酬に加算
 
             done = 0    # 0:未完走, 1:完走, それ以外:なんらかで強制終了
 
-            if next_env_info[19] == 1:
+            if EnvNext.Lap == 1:
                 done = 1
                 print("完走しました")
 
             # 3秒以上速度がunder_limitを下回ると強制終了
-            if next_env_info[12] >= under_limit:    # next_state_info[12] がunder_limit以下になった時点の inGameSec を記録
-                initial_inGameSec = inGameSec            
-            if initial_inGameSec is not None and inGameSec - initial_inGameSec >= keep_time:    # inGameSec が3増えたかどうかをチェック
+            if EnvNext.CurrentVelocity >= val.UNDER_SPEED_LIMIT:    # 速度がunder_limit以下になった時点の inGameSec を記録
+                initial_inGameSec = EnvNext.Time            
+            if initial_inGameSec is not None and EnvNext.Time - initial_inGameSec >= val.STOP_TIME_LIMIT:    # inGameSec が3増えたかどうかをチェック
                 done = 2
                 reward -= val.C_W
                 print("一定時間停止していました")
 
-            # シム内時刻が一定を超過した場合に強制終了
-            if 30 <= inGameSec:
+            # コースアウト(座標が一定より下回る)と強制終了
+            if EnvNext.WorldLocation_z <= -10:
                 done = 3
+                reward -= val.C_W
+                print("コースアウトしました")
+
+            # シム内時刻が一定を超過した場合に強制終了
+            if 30 <= EnvNext.Time:
+                done = 4
+                reward -= val.C_W
                 print("時間がかかり過ぎました")
 
 
             total_reward += reward
+            next_state = np.array([EnvNext.Time, EnvNext.Acceleration_x, EnvNext.Acceleration_y, EnvNext.Acceleration_z, 
+                        EnvNext.AngularVelocity_roll, EnvNext.AngularVelocity_pitch, EnvNext.AngularVelocity_yaw, 
+                        EnvNext.MagneticForce_x, EnvNext.MagneticForce_y, EnvNext.MagneticForce_z]).reshape(1, -1)
             agent.remember(state, action, reward, next_state, done)
             state = next_state
-            env_info = next_env_info
-            inGameSec = next_env_info[0]  # シミュレータ内経過時間を更新
             if done != 0:
                 break
 
-        change_throttle(0)      # EP終了時にスロットルを0に
+        change_throttle(conn, 0)      # EP終了時にスロットルを0に
 
-        evalulation = sum_speed / count
+        evaluation = sum_speed / count
 
         # 途中経過記録    
         rewards.append(total_reward)
-        times_finished.append(inGameSec)
+        times_finished.append(EnvNext.Time)
         with open(val.DIR+f"temp{module_suffix}.csv", mode="a", newline="") as file:
             writer = csv.writer(file)
             spend_time = datetime.now() - start_time
             hours, remainder = divmod(spend_time.total_seconds(), 3600)
             minutes, seconds = divmod(remainder, 60)
-            writer.writerow([total_reward, evalulation, count, f"{inGameSec:.2f}", done, f"{hours:.0f}h {minutes:.0f}min {seconds:.0f}s"])
+            writer.writerow([total_reward, evaluation, count, f"{EnvNext.Time:.2f}", done, f"{hours:.0f}h {minutes:.0f}min {seconds:.0f}s"])
 
         if len(agent.memory) > batch_size:
             agent.replay(batch_size)
         print(f"Episode {e+1}/{episodes} - Reward: {total_reward}")
 
         # 環境リセット
-        reset_env()
+        reset_env(conn)
 
 
     server_socket.close()
