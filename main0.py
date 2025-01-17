@@ -18,6 +18,9 @@ module_suffix = os.path.splitext(file_name)[0][-1]
 module_name = f"valuables{module_suffix}"
 val = importlib.import_module(module_name)
 
+# フォルダの存在を確認し、存在しない場合に作成
+if not os.path.exists(val.DIR):
+    os.makedirs(val.DIR)
 
 # DQNエージェントの定義
 class DQNAgent:
@@ -68,6 +71,9 @@ class DQNAgent:
     
     def save(self, filepath):
         self.model.save_weights(filepath + "best_model.h5")
+
+    def load(self, filepath):
+        self.model.load_weights(filepath + "best_model.h5")
 
 
 class EnvironmentInfo:
@@ -225,7 +231,7 @@ if __name__ == "__main__":
                 print("一定時間停止していました")
 
             # コースアウト(座標が一定より下回る)と強制終了
-            if EnvNext.WorldLocation_z <= -10:
+            if EnvNext.WorldLocation_z <= -10 or EnvNext.Lap < 0:
                 done = 3
                 reward -= val.C_W
                 print("コースアウトしました")
