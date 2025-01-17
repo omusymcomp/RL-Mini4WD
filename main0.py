@@ -70,10 +70,10 @@ class DQNAgent:
             self.epsilon *= self.epsilon_decay
     
     def save(self, filepath):
-        self.model.save_weights(filepath + "best_model.h5")
+        self.model.save(filepath)
 
     def load(self, filepath):
-        self.model.load_weights(filepath + "best_model.h5")
+        self.model.load_model(filepath)
 
 
 class EnvironmentInfo:
@@ -218,7 +218,7 @@ if __name__ == "__main__":
 
             done = 0    # 0:未完走, 1:完走, それ以外:なんらかで強制終了
 
-            if EnvNext.Lap == 1:
+            if EnvNext.Lap == val.LAP_NUM:
                 done = 1
                 print("完走しました")
 
@@ -254,7 +254,13 @@ if __name__ == "__main__":
 
         change_throttle(conn, 0)      # EP終了時にスロットルを0に
 
+        # 評価関数
         evaluation = sum_speed / count
+        # 評価関数が向上したらモデルを保存
+        if evaluation > agent.qv[0]:
+            agent.qv = [evaluation, e]
+            agent.save(val.DIR + f"best_model{module_suffix}.h5")
+
 
         # 途中経過記録    
         rewards.append(total_reward)

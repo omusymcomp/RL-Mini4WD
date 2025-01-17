@@ -11,11 +11,12 @@ EPSILON_DECAY = 0.997   # エピソードごとの探索率の減衰率
 LEARNING_RATE = 0.002    # 学習率
 
 C_W = 500000                 # 強制終了時のペナルティ
-C_R = 100000
+C_R = 0                 # ゴール時の報酬
 
 # 終了条件
 UNDER_SPEED_LIMIT = 50
 STOP_TIME_LIMIT = 3
+LAP_NUM = 3
 
 # 保存先
 DIR = "./results/"
